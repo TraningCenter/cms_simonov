@@ -1,0 +1,11 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<project version="4">
+  <component name="ProjectModuleManager">
+    <modules>
+      <module fileurl="file://$PROJECT_DIR$/ContentManager/ContentManager.iml" filepath="$PROJECT_DIR$/ContentManager/ContentManager.iml" />
+      <module fileurl="file://$PROJECT_DIR$/PostManager/PostManager.iml" filepath="$PROJECT_DIR$/PostManager/PostManager.iml" />
+      <module fileurl="file://$PROJECT_DIR$/UserInterface/UserInterface.iml" filepath="$PROJECT_DIR$/UserInterface/UserInterface.iml" />
+      <module fileurl="file://$PROJECT_DIR$/proj.iml" filepath="$PROJECT_DIR$/proj.iml" />
+    </modules>
+  </component>
+</project>

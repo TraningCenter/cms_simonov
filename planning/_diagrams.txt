@@ -1,0 +1,486 @@
+use case------------------------------------------------------------
+
+@startuml
+left to right direction
+
+title Content management system
+
+:Unauthorized user: as uu
+:Authorized user: as au
+(read articles) as (read)
+(search articles by title) as (search)
+(add articles) as (add)
+(edit its articles) as (edit)
+
+uu --> (register)
+uu --> (log in)
+uu --> (read articles)
+uu --> (search)
+
+au --> (log out)
+au --> (read)
+au --> (search)
+au --> (add)
+au --> (edit)
+
+(read) <|-- (read articles from bookmarks)
+(read) <.. (add article to bookmarks) : <<extend>>
+(add) ..> (add content) : <<include>>
+(add) <.. (add contributors) : <<extend>>
+(edit) <|-- (edit content)
+(edit) <|-- (rollback to a previous\nversion of the article)
+(edit) <|-- (delete its articles)
+(edit) <|-- (restore deleted articles)
+
+@enduml
+
+sequence------------------------------------------------------------
+
+@startuml
+
+title "Article creation by several authors"
+
+actor Author
+actor Reader
+actor Contributor
+boundary "Web GUI" as UI
+control "Controller" as Control
+database "Post manager DB" as PMDB
+database "Content manager DB" as CMDB
+
+group Log in
+    Author -> UI : Log in
+    UI -> Control : Log in
+    Control -> PMDB : Check login and password
+    PMDB -> PMDB : Check login\nand password
+    PMDB --> Control : ok
+    Control --> UI : ok
+    UI --> Author : ok
+end
+
+Author -> UI : Create new article
+Author -> UI : Add contetnt
+Author -> UI : Add contributors
+Author -> UI : Submit article\n(without publishing)
+UI -> Control : Save article
+Control -> CMDB : Save article data
+CMDB --> Control : ok
+Control -> PMDB : Save data about creating\nan article by the user
+PMDB --> Control : ok
+Control --> UI : ok
+UI --> Author : ok
+
+group Search
+    Reader -> UI : Search our article
+    UI -> Control : Search article
+    Control -> PMDB : Search article
+    PMDB --> Control : article exists,\nbut you can't read it.
+    Control --> UI : nope
+    UI --> Reader : nope
+end
+
+group Log in (described earlier)
+    Contributor -> PMDB : Log in
+    PMDB --> Contributor : ok
+end 
+
+Contributor -> UI : Search for the\nnecessary article
+UI -> Control : Search article
+Control -> PMDB : Search article
+PMDB --> Control : article id
+Control -> CMDB : Search article by id
+CMDB --> Control : article
+Control --> UI : article
+UI --> Contributor : article
+Contributor -> UI : Edit article
+Contributor -> UI : Submit and publish an article
+UI -> Control : Save and publish article
+Control -> CMDB : Save old version\nof article
+Control -> CMDB : Save new article
+CMDB --> Control : ok
+Control -> PMDB : Publish an article
+PMDB --> Control : ok
+Control --> UI : ok
+UI --> Contributor : ok
+
+group Search (described earlier)
+    Reader -> PMDB : Search our article
+    PMDB --> Reader : article
+end
+
+@enduml
+
+db(?)------------------------------------------------------------
+
+User
+---
+user_id PK int
+login varchar(30)
+password varchar(30)
+email varchar(30)
+
+User_bookmarks
+---
+user_id PK int FK - User.user_id
+post_id PK int FK - Post.post_id
+
+Post_contributors
+---
+user_id PK int FK - User.user_id
+post_id PK int FK - Post.post_id
+is_author boolean
+
+Post
+---
+post_id PK int
+name varchar(50)
+descriptinon text
+published boolean
+publish_date date
+
+Post_content
+---
+post_id PK int FK - Post.post_id
+content_id PK int FK - Content.content_id
+is_current boolean
+
+Content
+---
+content_id PK int
+changing_date date
+
+Content_text_image
+---
+content_id PK int FK - Content.content_id
+text_id PK int NULL FK - Text.text_id
+image_id PK int NULL FK - Image.image_id
+index_number int
+
+Text
+---
+text_id PK int
+text text
+
+Image
+---
+image_id PK int
+image blob
+
+component------------------------------------------------------------
+
+@startuml
+
+title Content management system
+
+node "Content manager" {
+    database "Content DB" {
+        [Texts]
+        [Pictures]
+    }
+    
+    cloud {
+        [File system]
+    }
+    [Content management] --> [File system]
+    [Content management] --> [Texts]
+    [Content management] --> [Pictures]
+    [Content management] - IContent
+}
+
+node "Post manager" {
+    database "Users and posts DB" {
+        [Users]
+        [Posts]
+    }
+    [User management] --> [Users]
+    [User management] -left- IUser
+    [Post management] --> [Posts]
+    [Post management] -left- IPost
+}
+
+node "Proxy server" {
+    [Controller] --> IContent : REST
+    [Controller] --> IPost : REST
+    [Controller] --> IUser : REST
+    [Controller] -up- IController
+}
+
+node "User interface" {
+    [Client UI]
+    [Server UI] --> IController : HTTP
+}
+
+@enduml
+
+sequence------------------------------------------------------------
+
+@startuml
+
+title Authorization and read post
+
+actor User
+boundary "Web GUI" as UI
+control "Controller" as Control
+control "Content management" as CM
+control "Post management" as PM
+control "User management" as UM
+
+group Authorization
+    User -> UI : log in
+    UI -> Control : log in
+    Control -> UM : log in
+    UM --> Control : ok
+    Control --> UI : ok
+    UI --> User : ok
+end
+
+group search all articles
+    User -> UI : search all articles
+    UI -> Control : search all articles
+    group PM searching all id of articles summary
+        Control -> PM : search articles\nand their summaries
+        PM -> PM : search published\narticles and their\nsummary id
+        PM --> Control : list of articles and\ntheir summary id
+    end
+    group CM searching needed content
+        Control -> CM : search for\nsummaries of articles
+        CM -> CM : search summaries
+        CM --> Control : short summary\nof articles
+    end
+    Control --> UI : list of articles\nnames and summaries
+    UI --> User : list of summaries
+end
+
+group search selected article
+    User -> UI : select and\nopen article
+    UI -> Control : open articles
+    group PM searching contents of article
+        Control -> PM : search aticle content
+        PM -> PM : search for\narticle content list
+        PM --> Control : list of content id
+    end
+    group CM searhing contents
+        Control -> CM : search content
+        CM -> CM : search contents
+        CM --> Control : article content
+    end
+    Control --> UI : article
+    UI --> User : article
+end
+
+@enduml
+
+class(CM)------------------------------------------------------------
+
+@startuml
+skinparam classAttributeIconSize 0
+
+title Content manager
+
+class TextEntity {
+    -Integer id
+    -String value
+    +Integer getId()
+    +void setId(Integer id)
+    +String getValue()
+    +void setValue(String value)
+    +TextEntity()
+    +TextEntity(String value)
+}
+
+class PictureEntity {
+    -Integer id
+    -Byte[] value
+    -long hash
+    +Integer getId()
+    +void setId(Integer id)
+    +Byte[] getValue()
+    +void setValue(Byte[] value)
+    +long getHash()
+    +void setHash()
+    +PictureEntity()
+    +PictureEntity(Byte[] value)
+}
+
+abstract class DAO<T, K> {
+    +DAO(T entity)
+    +void create(T entity)
+    +T find(K id)
+    +List<T> findAll()
+    +void update(T entity)
+    +void delete(T entity)
+}
+
+TextDAO --|> DAO
+TextDAO o--TextEntity
+class TextDAO<TextEntity, Integer> {
+}
+
+PictureDAO --|> DAO
+PictureDAO o-- PictureEntity
+class PictureDAO<PictureEntity, Integer> {
+}
+
+TextDTO ..> TextEntity
+class TextDTO {
+    -Integer id
+    -String value
+    +Integer getId()
+    +void setId(Integer id)
+    +String getValue()
+    +void setValue(String value)
+    +TextDTO()
+    +TextDTO(String value)
+}
+
+PictureDTO ..> PictureEntity
+class PictureDTO {
+    -Integer id
+    -Byte[] value
+    -long hash
+    +Integer getId()
+    +void setId(Integer id)
+    +Byte[] getValue()
+    +void setValue(Byte[] value)
+    +long getHash()
+    +void setHash()
+    +PictureDTO()
+    +PictureDTO(Byte[] value)
+}
+
+class TextMapper {
+    +TextDTO textEntityToTextDTO(TextEntity text)
+    +TextEntity textDTOToTextEntity(TextDTO dto)
+}
+
+class PictureMapper {
+    +PictureDTO pictureEntityToPictureDTO(PictureEntity picture)
+    +PictureEntity pictureDTOToPictureEntity(PictureDTO dto)
+}
+
+TextService o-- TextDTO
+TextService o-- TextDAO
+TextService *-- TextMapper
+class TextService {
+    -TextDao dao
+    -TextMapper mapper
+    +TextService()
+    +TextDto find(Integer id)
+    +List<TextDto> findAll()
+    +void create(TextDto text)
+    +void update(TextDto text)
+    +void delete(TextDto text)
+}
+
+PictureService o-- PictureDTO
+PictureService o-- PictureDAO
+PictureService *-- PictureMapper
+class PictureService {
+    -PictureDao dao
+    -PictureMapper mapper
+    +PictureService()
+    +PictureDto find(Integer id)
+    +List<PictureDto> findAll()
+    +void create(PictureDto text)
+    +void update(PictureDto text)
+    +void delete(PictureDto text)
+}
+
+class PictureTmpQueue {
+    -List<byte[]> pictures
+    +byte[] getOldestPicture()
+    +long getPictureHash(byte[] picture)
+    +void addPicture(byte[] picture)
+    +byte[] deletePicture()
+}
+
+interface IContent {
+    void addText(TextDto text)
+    void addPicture(PictureDto picture)
+    void editText(Integer id, TextDto text)
+    void editPicture(Integer id, PictureDto picture)
+    TextDto getText(Integer id)
+    PictureDto getPicture(Integer id)
+}
+
+ContentManager o-- TextService
+ContentManager o-- PictureService
+ContentManager o-- PictureTmpQueue
+ContentManager ..|> IContent
+class ContentManager {
+    -TextService textService
+    -PictureService pictureService
+    -PictureTmpQueue picQueue
+    +ContentManager()
+    +void addText(TextDto text)
+    +void addPicture(PictureDto picture)
+    +void editText(Integer id, TextDto text)
+    +void editPicture(Integer id, PictureDto picture)
+    +TextDto getText(Integer id)
+    +PictureDto getPicture(Integer id)
+}
+
+@enduml
+
+
+activity------------------------------------------------------------
+
+@startuml
+
+title Content manager actions
+
+[*] --> work_state
+
+state "CMS running on the server" as work_state {
+    state "Accept text" as add_text
+    state "Text is added to the database" as text_added
+    text_added : return the id of the added entry
+    [*] -> add_text : request\nto add text
+    add_text -> text_added : save it
+    text_added -> [*]
+    --
+    state "Accept pic" as add_pic
+    state "Pic is in queue" as in_queue
+    [*] -> add_pic : request\nto add pic
+    add_pic -> in_queue : add to the\npic queue
+    in_queue -> [*]
+    --
+    state "Queue processing" as processing
+    processing : images are viewed\nand deleted or added
+    state "Considering one of the\npicture queue" as consider
+    state "Search for an image\nin the database" as search_pic
+    state "Delete pic" as pic_delete
+    pic_delete : delete pic from queue
+    state "Add pic" as pic_add
+    pic_add : add pic to database
+    state "Pic added" as pic_added
+    pic_added : return id of pic\n(added or already existing)
+    [*] -> processing
+    processing -> consider
+    consider -->search_pic
+    search_pic --> pic_add : pic has not been\nadded yet
+    search_pic --> pic_delete : pic already added\nin the database
+    pic_add --> pic_added
+    pic_delete --> pic_added
+    pic_added --> consider : queue is not empty
+    pic_added --> [*] : queue is empty
+    --
+    state "Content search" as search
+    search : determine what to look for: text or image\nlooking for
+    state "Content found" as found
+    found : return the content
+    [*] -> search : request to\nsearch content
+    search -> found
+    found -> [*]
+    --
+    state "Content search" as pic_search
+    pic_search : determine what to look for: text or image\nlooking for
+    state "Content deleted" as deleted
+    [*] -> pic_search : request to\ndelete pic
+    pic_search -> deleted
+    deleted -> [*]
+    
+
+}
+
+@enduml
